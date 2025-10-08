@@ -31,24 +31,29 @@ It helps **lenders** record customer details, loans, collaterals, and transactio
 ## 🧱 Entity Details
 
 ### Customer
+- Customer_ID
 - Name
 - Father's Name
 - Address
 
 ### Loan
 - Customer_ID
+- Loan_ID
 - Collateral
 - Transactions
 - Net Due
 - Interest Rate
 
 ### Collateral
+- Loan_ID
 - Item
 - Weight
 - %Purity
 - Net Weight
 
 ### Transaction
+- Loan_ID
+- Transaction_ID
 - Transaction_Type (Credit / Debit)
 - Amount
 - Date
