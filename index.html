@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💰 Lending Ledger</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-coins"></i> Lending Ledger</h1>
+                <p>Digital ledger for lending business</p>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="nav">
+            <button class="nav-btn active" data-section="dashboard">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </button>
+            <button class="nav-btn" data-section="customers">
+                <i class="fas fa-users"></i> Customers
+            </button>
+            <button class="nav-btn" data-section="loans">
+                <i class="fas fa-hand-holding-usd"></i> Loans
+            </button>
+            <button class="nav-btn" data-section="transactions">
+                <i class="fas fa-exchange-alt"></i> Transactions
+            </button>
+            <button class="nav-btn" data-section="rates">
+                <i class="fas fa-chart-line"></i> Rates
+            </button>
+            <button class="nav-btn" data-section="data-management">
+                <i class="fas fa-database"></i> Data Management
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <div class="section-header">
+                    <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-customers">0</h3>
+                            <p>Total Customers</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-hand-holding-usd"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-loans">0</h3>
+                            <p>Active Loans</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-outstanding">₹0</h3>
+                            <p>Total Outstanding</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-transactions">0</h3>
+                            <p>Total Transactions</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Customers Section -->
+            <section id="customers" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-users"></i> Customers</h2>
+                    <button class="btn btn-primary" id="add-customer-btn">
+                        <i class="fas fa-plus"></i> Add Customer
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="customers-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Father's Name</th>
+                                <th>Address</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Loans Section -->
+            <section id="loans" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-hand-holding-usd"></i> Loans</h2>
+                    <button class="btn btn-primary" id="add-loan-btn">
+                        <i class="fas fa-plus"></i> Add Loan
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="loans-table">
+                        <thead>
+                            <tr>
+                                <th>Loan ID</th>
+                                <th>Customer</th>
+                                <th>Collateral</th>
+                                <th>Interest Rate</th>
+                                <th>Net Due</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loans-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Loan Transactions Section -->
+                <div id="loan-transactions-section" class="loan-transactions-section" style="display: none;">
+                    <div class="transactions-section-header">
+                        <h3 id="loan-transactions-title">Loan Transactions</h3>
+                        <button class="btn btn-secondary" id="hide-transactions-btn">
+                            <i class="fas fa-times"></i> Hide Transactions
+                        </button>
+                    </div>
+                    
+                    <div class="loan-info-card" id="selected-loan-info">
+                        <!-- Selected loan details will be populated here -->
+                    </div>
+                    
+                    <div class="transactions-summary-cards" id="loans-transactions-summary">
+                        <!-- Summary cards will be populated here -->
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="data-table" id="loans-transactions-table">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loans-transactions-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Transactions Section -->
+            <section id="transactions" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-exchange-alt"></i> Transactions</h2>
+                    <button class="btn btn-primary" id="add-transaction-btn">
+                        <i class="fas fa-plus"></i> Add Transaction
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="transactions-table">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Loan ID</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Rates Section -->
+            <section id="rates" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> Rates</h2>
+                </div>
+                <div class="rates-container">
+                    <div class="rate-card">
+                        <h3>Gold Rate</h3>
+                        <div class="rate-input">
+                            <span>₹</span>
+                            <input type="number" id="gold-rate" placeholder="Enter gold rate">
+                            <button class="btn btn-primary" id="update-gold-rate">Update</button>
+                        </div>
+                    </div>
+                    <div class="rate-card">
+                        <h3>Silver Rate</h3>
+                        <div class="rate-input">
+                            <span>₹</span>
+                            <input type="number" id="silver-rate" placeholder="Enter silver rate">
+                            <button class="btn btn-primary" id="update-silver-rate">Update</button>
+                        </div>
+                    </div>
+                    <div class="rate-card">
+                        <h3>Default Interest Rate</h3>
+                        <div class="rate-input">
+                            <span>%</span>
+                            <input type="number" id="default-interest-rate" step="0.01" placeholder="Enter default interest rate">
+                            <button class="btn btn-primary" id="update-default-interest-rate">Update</button>
+                        </div>
+                        <p class="rate-description">This rate will be applied to all new loans by default</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Data Management Section -->
+            <section id="data-management" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-database"></i> Data Management</h2>
+                </div>
+                <div class="data-management-container">
+                    <div class="data-card">
+                        <h3>Export Data</h3>
+                        <p>Download all your data as CSV files</p>
+                        <div class="export-buttons">
+                            <button class="btn btn-primary" id="export-customers">
+                                <i class="fas fa-download"></i> Export Customers
+                            </button>
+                            <button class="btn btn-primary" id="export-loans">
+                                <i class="fas fa-download"></i> Export Loans
+                            </button>
+                            <button class="btn btn-primary" id="export-transactions">
+                                <i class="fas fa-download"></i> Export Transactions
+                            </button>
+                            <button class="btn btn-success" id="export-all">
+                                <i class="fas fa-download"></i> Export All Data (JSON Backup)
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-card">
+                        <h3>Import Data</h3>
+                        <p>Import data from CSV files</p>
+                        <div class="import-buttons">
+                            <input type="file" id="import-file" accept=".csv" style="display: none;">
+                            <button class="btn btn-primary" id="import-customers">
+                                <i class="fas fa-upload"></i> Import Customers
+                            </button>
+                            <button class="btn btn-primary" id="import-loans">
+                                <i class="fas fa-upload"></i> Import Loans
+                            </button>
+                            <button class="btn btn-primary" id="import-transactions">
+                                <i class="fas fa-upload"></i> Import Transactions
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-card">
+                        <h3>Backup & Restore</h3>
+                        <p>Create complete backups of your data</p>
+                        <div class="backup-buttons">
+                            <button class="btn btn-warning" id="create-backup">
+                                <i class="fas fa-save"></i> Create Backup
+                            </button>
+                            <button class="btn btn-info" id="restore-backup">
+                                <i class="fas fa-undo"></i> Restore Backup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Customer Modal -->
+    <div id="customer-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="customer-modal-title">Add Customer</h3>
+                <span class="close">&times;</span>
+            </div>
+            <form id="customer-form">
+                <div class="form-group">
+                    <label for="customer-name">Name *</label>
+                    <input type="text" id="customer-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="customer-father">Father's Name *</label>
+                    <input type="text" id="customer-father" required>
+                </div>
+                <div class="form-group">
+                    <label for="customer-address">Address *</label>
+                    <textarea id="customer-address" required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-customer">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loan Modal -->
+    <div id="loan-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="loan-modal-title">Add Loan</h3>
+                <span class="close">&times;</span>
+            </div>
+            <form id="loan-form">
+                <div class="form-group">
+                    <label for="loan-customer">Customer *</label>
+                    <select id="loan-customer" required>
+                        <option value="">Select Customer</option>
+                    </select>
+                </div>
+                <div class="form-group" id="interest-rate-group" style="display: none;">
+                    <label for="loan-interest-rate">Interest Rate (%) *</label>
+                    <input type="number" id="loan-interest-rate" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Collateral Items *</label>
+                    <div id="collateral-items-container">
+                        <div class="collateral-item" data-item-index="0">
+                            <div class="collateral-item-header">
+                                <h4>Item 1</h4>
+                                <button type="button" class="btn btn-danger btn-sm remove-collateral-item" style="display: none;">
+                                    <i class="fas fa-trash"></i> Remove
+                                </button>
+                            </div>
+                            <div class="collateral-fields">
+                                <div class="form-group">
+                                    <label>Item Name *</label>
+                                    <input type="text" class="collateral-item-name" placeholder="e.g., Gold Chain, Silver Ring" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Metal Type *</label>
+                                    <select class="collateral-metal-type" required>
+                                        <option value="">Select Metal</option>
+                                        <option value="gold">Gold</option>
+                                        <option value="silver">Silver</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Weight (grams) *</label>
+                                    <input type="number" class="collateral-weight" step="0.01" placeholder="e.g., 10.5" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Purity (%) *</label>
+                                    <input type="number" class="collateral-purity" step="0.01" placeholder="e.g., 91.6" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="add-collateral-item">
+                        <i class="fas fa-plus"></i> Add Another Item
+                    </button>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-loan">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Transaction Modal -->
+    <div id="transaction-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="transaction-modal-title">Add Transaction</h3>
+                <span class="close">&times;</span>
+            </div>
+            <form id="transaction-form">
+                <div class="form-group">
+                    <label for="transaction-loan">Loan *</label>
+                    <select id="transaction-loan" required>
+                        <option value="">Select Loan</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="transaction-type">Transaction Type *</label>
+                    <select id="transaction-type" required>
+                        <option value="">Select Type</option>
+                        <option value="credit">Credit (Payment)</option>
+                        <option value="debit">Debit (Disbursement)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="transaction-amount">Amount (₹) *</label>
+                    <input type="number" id="transaction-amount" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="transaction-date">Date *</label>
+                    <input type="date" id="transaction-date" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-transaction">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Customer Loans Modal -->
+    <div id="customer-loans-modal" class="modal">
+        <div class="modal-content customer-loans-modal-content">
+            <div class="modal-header">
+                <h3 id="customer-loans-modal-title">Customer Loans</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="customer-loans-content">
+                <div class="customer-info" id="customer-loans-info">
+                    <!-- Customer details will be populated here -->
+                </div>
+                <div class="loans-summary" id="loans-summary">
+                    <!-- Summary will be populated here -->
+                </div>
+                <div class="loans-table-container">
+                    <table class="data-table" id="customer-loans-table">
+                        <thead>
+                            <tr>
+                                <th>Loan ID</th>
+                                <th>Interest Rate</th>
+                                <th>Collateral Items</th>
+                                <th>Net Due</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customer-loans-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="transactions-section" id="transactions-section" style="display: none;">
+                    <h4>Loan Transactions</h4>
+                    <div class="transactions-table-container">
+                        <table class="data-table" id="customer-transactions-table">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customer-transactions-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
