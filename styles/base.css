@@ -1,0 +1,9 @@
+/* Base, reset, layout, utilities */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; min-height: 100vh; color: #111827; }
+.container { max-width: 1400px; margin: 0 auto; padding: 16px; }
+.text-center { text-align: center; }
+.text-success { color: #38a169; }
+.text-danger { color: #e53e3e; }
+.text-warning { color: #d69e2e; }
+.hidden { display: none !important; }

@@ -2,25 +2,26 @@
 
 class LendingLedger {
     constructor() {
-        this.customers = this.loadData('customers') || [];
-        this.loans = this.loadData('loans') || [];
-        this.transactions = this.loadData('transactions') || [];
-        this.rates = this.loadData('rates') || { goldRate: 0, silverRate: 0, defaultInterestRate: 12.0 };
-        this.currentCustomerId = this.loadData('currentCustomerId') || 1;
-        this.currentLoanId = this.loadData('currentLoanId') || 1;
-        this.currentTransactionId = this.loadData('currentTransactionId') || 1;
+        this.customers = [];
+        this.loans = [];
+        this.transactions = [];
+        this.rates = { goldRate: 0, silverRate: 0, defaultInterestRate: 12.0 };
+        this.currentCustomerId = 1;
+        this.currentLoanId = 1;
+        this.currentTransactionId = 1;
         
         this.init();
     }
 
     init() {
         this.setupEventListeners();
-        this.updateDashboard();
-        this.renderCustomers();
-        this.renderLoans();
-        this.renderTransactions();
-        this.updateRates();
-        this.setDefaultDate();
+        this.initFromDB().then(() => {
+            this.updateDashboard();
+            this.renderCustomers();
+            this.renderTransactions();
+            this.updateRates();
+            this.setDefaultDate();
+        });
     }
 
     setupEventListeners() {
@@ -45,11 +46,7 @@ class LendingLedger {
             this.closeModal('customer-modal');
         });
 
-        // Loan modal
-        document.getElementById('add-loan-btn').addEventListener('click', () => {
-            this.openLoanModal();
-        });
-
+        // Loan modal (opened via customers tab actions)
         document.getElementById('loan-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.saveLoan();
@@ -58,6 +55,30 @@ class LendingLedger {
         document.getElementById('cancel-loan').addEventListener('click', () => {
             this.closeModal('loan-modal');
         });
+
+        const calcLoanModalBtn = document.getElementById('calculate-loan-modal');
+        if (calcLoanModalBtn) {
+            calcLoanModalBtn.addEventListener('click', () => {
+                const form = document.getElementById('loan-form');
+                const loanId = form.dataset.loanId ? parseInt(form.dataset.loanId) : null;
+                let loan;
+                if (loanId) {
+                    loan = this.loans.find(l => l.id === loanId);
+                } else {
+                    // Build a preview loan object from form fields
+                    loan = {
+                        id: 0,
+                        customerId: parseInt(document.getElementById('loan-customer').value) || 0,
+                        interestRate: this.rates.defaultInterestRate,
+                        collateralItems: this.collectCollateralItems()
+                    };
+                }
+                if (!loan) return;
+                const tx = this.transactions.filter(t => t.loanId === loan.id);
+                const result = window.Finance.calculateLoanDues(loan, tx);
+                alert(`Principal Due: ${this.formatCurrency(result.principalDue)}\nInterest Due: ${this.formatCurrency(result.interestDue)}\nTotal Due: ${this.formatCurrency(result.totalDue)}`);
+            });
+        }
 
         // Transaction modal
         document.getElementById('add-transaction-btn').addEventListener('click', () => {
@@ -88,51 +109,48 @@ class LendingLedger {
 
         // Data Management - Export
         document.getElementById('export-customers').addEventListener('click', () => {
-            this.exportToCSV('customers');
+            ImportExport.exportToCSV(this, 'customers');
         });
 
         document.getElementById('export-loans').addEventListener('click', () => {
-            this.exportToCSV('loans');
+            ImportExport.exportToCSV(this, 'loans');
         });
 
         document.getElementById('export-transactions').addEventListener('click', () => {
-            this.exportToCSV('transactions');
+            ImportExport.exportToCSV(this, 'transactions');
         });
 
         document.getElementById('export-all').addEventListener('click', () => {
-            this.exportAllData();
+            ImportExport.exportAllData(this);
         });
 
         // Data Management - Import
         document.getElementById('import-customers').addEventListener('click', () => {
-            this.importFromCSV('customers');
+            ImportExport.importFromCSV(this, 'customers');
         });
 
         document.getElementById('import-loans').addEventListener('click', () => {
-            this.importFromCSV('loans');
+            ImportExport.importFromCSV(this, 'loans');
         });
 
         document.getElementById('import-transactions').addEventListener('click', () => {
-            this.importFromCSV('transactions');
+            ImportExport.importFromCSV(this, 'transactions');
         });
 
         // Data Management - Backup & Restore
         document.getElementById('create-backup').addEventListener('click', () => {
-            this.createBackup();
+            ImportExport.createBackup(this);
         });
 
         document.getElementById('restore-backup').addEventListener('click', () => {
-            this.restoreBackup();
+            ImportExport.restoreBackup(this);
         });
 
         document.getElementById('import-file').addEventListener('change', (e) => {
-            this.handleFileImport(e);
+            ImportExport.handleFileImport(this, e);
         });
 
-        // Hide transactions section
-        document.getElementById('hide-transactions-btn').addEventListener('click', () => {
-            this.hideLoanTransactions();
-        });
+        // Hide transactions section (loans tab removed)
 
         // Collateral Items Management
         document.getElementById('add-collateral-item').addEventListener('click', () => {
@@ -155,6 +173,16 @@ class LendingLedger {
                 }
             });
         });
+
+        // Customers filter
+        const nameFilter = document.getElementById('customer-filter-name');
+        const fatherFilter = document.getElementById('customer-filter-father');
+        const addressFilter = document.getElementById('customer-filter-address');
+        [nameFilter, fatherFilter, addressFilter].forEach(input => {
+            if (input) {
+                input.addEventListener('input', () => this.renderCustomers());
+            }
+        });
     }
 
     showSection(sectionName) {
@@ -171,14 +199,45 @@ class LendingLedger {
         document.getElementById(sectionName).classList.add('active');
     }
 
-    // Data Management
-    loadData(key) {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : null;
+    // Data Management (IndexedDB backed with fallback migration)
+    async initFromDB() {
+        try {
+            const migrated = await DB.get('migrated');
+            if (!migrated) {
+                // migrate from localStorage if present
+                const keys = ['customers','loans','transactions','rates','currentCustomerId','currentLoanId','currentTransactionId'];
+                const entries = [];
+                keys.forEach(k => {
+                    const v = localStorage.getItem(k);
+                    if (v !== null) {
+                        entries.push([k, JSON.parse(v)]);
+                    }
+                });
+                if (entries.length) await DB.bulkSet(entries);
+                await DB.set('migrated', true);
+            }
+            this.customers = (await DB.get('customers')) || [];
+            this.loans = (await DB.get('loans')) || [];
+            this.transactions = (await DB.get('transactions')) || [];
+            this.rates = (await DB.get('rates')) || { goldRate: 0, silverRate: 0, defaultInterestRate: 12.0 };
+            this.currentCustomerId = (await DB.get('currentCustomerId')) || 1;
+            this.currentLoanId = (await DB.get('currentLoanId')) || 1;
+            this.currentTransactionId = (await DB.get('currentTransactionId')) || 1;
+        } catch (e) {
+            // fallback to previous localStorage values
+            const ls = (k, d) => { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; };
+            this.customers = ls('customers', []);
+            this.loans = ls('loans', []);
+            this.transactions = ls('transactions', []);
+            this.rates = ls('rates', { goldRate: 0, silverRate: 0, defaultInterestRate: 12.0 });
+            this.currentCustomerId = ls('currentCustomerId', 1);
+            this.currentLoanId = ls('currentLoanId', 1);
+            this.currentTransactionId = ls('currentTransactionId', 1);
+        }
     }
 
-    saveData(key, data) {
-        localStorage.setItem(key, JSON.stringify(data));
+    async saveData(key, data) {
+        try { await DB.set(key, data); } catch (_) { localStorage.setItem(key, JSON.stringify(data)); }
     }
 
     // Customer Management
@@ -243,7 +302,6 @@ class LendingLedger {
             this.saveData('loans', this.loans);
             this.saveData('transactions', this.transactions);
             this.renderCustomers();
-            this.renderLoans();
             this.renderTransactions();
             this.updateDashboard();
         }
@@ -253,7 +311,21 @@ class LendingLedger {
         const tbody = document.getElementById('customers-tbody');
         tbody.innerHTML = '';
 
-        this.customers.forEach(customer => {
+        const nameFilter = document.getElementById('customer-filter-name');
+        const fatherFilter = document.getElementById('customer-filter-father');
+        const addressFilter = document.getElementById('customer-filter-address');
+        const nameQuery = (nameFilter && nameFilter.value ? nameFilter.value : '').trim().toLowerCase();
+        const fatherQuery = (fatherFilter && fatherFilter.value ? fatherFilter.value : '').trim().toLowerCase();
+        const addressQuery = (addressFilter && addressFilter.value ? addressFilter.value : '').trim().toLowerCase();
+
+        const filtered = this.customers.filter(c => {
+            const nameOk = !nameQuery || (c.name || '').toLowerCase().includes(nameQuery);
+            const fatherOk = !fatherQuery || (c.fatherName || '').toLowerCase().includes(fatherQuery);
+            const addressOk = !addressQuery || (c.address || '').toLowerCase().includes(addressQuery);
+            return nameOk && fatherOk && addressOk;
+        });
+
+        filtered.forEach(customer => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${customer.id}</td>
@@ -302,10 +374,10 @@ class LendingLedger {
             const loan = this.loans.find(l => l.id === loanId);
             title.textContent = 'Edit Loan';
             document.getElementById('loan-customer').value = loan.customerId;
-            document.getElementById('loan-interest-rate').value = loan.interestRate;
+            // document.getElementById('loan-interest-rate').value = loan.interestRate;
             
-            // Show interest rate field for editing
-            document.getElementById('interest-rate-group').style.display = 'block';
+            // // Show interest rate field for editing
+            // document.getElementById('interest-rate-group').style.display = 'block';
             
             // Populate collateral items
             this.populateCollateralItems(loan.collateralItems);
@@ -317,7 +389,7 @@ class LendingLedger {
             delete form.dataset.loanId;
             
             // Hide interest rate field for new loans (uses default)
-            document.getElementById('interest-rate-group').style.display = 'none';
+            // document.getElementById('interest-rate-group').style.display = 'none';
             
             // Pre-select customer if provided
             if (customerId) {
@@ -342,7 +414,7 @@ class LendingLedger {
 
         const loan = {
             customerId: parseInt(document.getElementById('loan-customer').value),
-            interestRate: loanId ? parseFloat(document.getElementById('loan-interest-rate').value) : this.rates.defaultInterestRate,
+            interestRate: this.rates.defaultInterestRate,
             collateralItems: collateralItems
         };
 
@@ -350,16 +422,42 @@ class LendingLedger {
             // Update existing loan
             const index = this.loans.findIndex(l => l.id === parseInt(loanId));
             this.loans[index] = { ...loan, id: parseInt(loanId) };
+            // Ensure a COLLATERAL transaction represents this loan state
+            const existingCollateralTx = this.transactions.find(t => t.loanId === parseInt(loanId) && (t.type || '').toLowerCase() === 'collateral');
+            if (existingCollateralTx) {
+                existingCollateralTx.description = this.formatCollateralItems(this.loans[index]);
+                existingCollateralTx.amount = 0;
+            } else {
+                this.transactions.push({
+                    id: this.currentTransactionId++,
+                    loanId: parseInt(loanId),
+                    type: 'collateral',
+                    amount: 0,
+                    description: this.formatCollateralItems(this.loans[index]),
+                    date: new Date().toISOString().split('T')[0]
+                });
+            }
         } else {
             // Add new loan
             loan.id = this.currentLoanId++;
-            loan.netDue = 0; // Will be calculated based on transactions
+            loan.netDue = 0; // Calculated from transactions
             this.loans.push(loan);
+
+            // Create a COLLATERAL transaction to represent the loan creation
+            this.transactions.push({
+                id: this.currentTransactionId++,
+                loanId: loan.id,
+                type: 'collateral',
+                amount: 0,
+                description: this.formatCollateralItems(loan),
+                date: new Date().toISOString().split('T')[0]
+            });
         }
 
         this.saveData('loans', this.loans);
         this.saveData('currentLoanId', this.currentLoanId);
-        this.renderLoans();
+        this.saveData('transactions', this.transactions);
+        this.saveData('currentTransactionId', this.currentTransactionId);
         this.updateDashboard();
         this.closeModal('loan-modal');
     }
@@ -371,59 +469,15 @@ class LendingLedger {
             
             this.saveData('loans', this.loans);
             this.saveData('transactions', this.transactions);
-            this.renderLoans();
             this.renderTransactions();
             this.updateDashboard();
         }
     }
 
-    renderLoans() {
-        const tbody = document.getElementById('loans-tbody');
-        tbody.innerHTML = '';
-
-        this.loans.forEach(loan => {
-            const customer = this.customers.find(c => c.id === loan.customerId);
-            const customerName = customer ? customer.name : 'Unknown Customer';
-            
-            // Calculate net due
-            const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
-            let netDue = 0;
-            loanTransactions.forEach(transaction => {
-                if (transaction.type === 'credit') {
-                    netDue -= transaction.amount; // Payment reduces due amount
-                } else if (transaction.type === 'debit') {
-                    netDue += transaction.amount; // Disbursement increases due amount
-                }
-            });
-
-            // Format collateral items display using helper function
-            const collateralDisplay = this.formatCollateralItems(loan);
-
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${loan.id}</td>
-                <td>${customerName}</td>
-                <td>${collateralDisplay}</td>
-                <td>${loan.interestRate}%</td>
-                <td class="${netDue > 0 ? 'text-danger' : 'text-success'}">₹${netDue.toFixed(2)}</td>
-                <td>
-                    <button class="btn btn-info btn-sm" onclick="app.viewLoanTransactionsFromTable(${loan.id})">
-                        <i class="fas fa-list"></i> View Transactions
-                    </button>
-                    <button class="btn btn-primary btn-sm" onclick="app.openLoanModal(${loan.id})">
-                        <i class="fas fa-edit"></i> Edit
-                    </button>
-                    <button class="btn btn-danger btn-sm" onclick="app.deleteLoan(${loan.id})">
-                        <i class="fas fa-trash"></i> Delete
-                    </button>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
+    // renderLoans removed (loans tab deleted); loan views are accessed via customer modal
 
     // Transaction Management
-    openTransactionModal(transactionId = null) {
+    openTransactionModal(transactionId = null, preselectLoanId = null) {
         const modal = document.getElementById('transaction-modal');
         const form = document.getElementById('transaction-form');
         const title = document.getElementById('transaction-modal-title');
@@ -446,12 +500,16 @@ class LendingLedger {
             document.getElementById('transaction-loan').value = transaction.loanId;
             document.getElementById('transaction-type').value = transaction.type;
             document.getElementById('transaction-amount').value = transaction.amount;
+            document.getElementById('transaction-description').value = transaction.description || '';
             document.getElementById('transaction-date').value = transaction.date;
             form.dataset.transactionId = transactionId;
         } else {
             title.textContent = 'Add Transaction';
             form.reset();
             document.getElementById('transaction-date').value = new Date().toISOString().split('T')[0];
+            if (preselectLoanId) {
+                document.getElementById('transaction-loan').value = preselectLoanId;
+            }
             delete form.dataset.transactionId;
         }
         
@@ -466,6 +524,7 @@ class LendingLedger {
             loanId: parseInt(document.getElementById('transaction-loan').value),
             type: document.getElementById('transaction-type').value,
             amount: parseFloat(document.getElementById('transaction-amount').value),
+            description: document.getElementById('transaction-description').value.trim(),
             date: document.getElementById('transaction-date').value
         };
 
@@ -482,7 +541,6 @@ class LendingLedger {
         this.saveData('transactions', this.transactions);
         this.saveData('currentTransactionId', this.currentTransactionId);
         this.renderTransactions();
-        this.renderLoans(); // Update loan net due amounts
         this.updateDashboard();
         this.closeModal('transaction-modal');
     }
@@ -493,7 +551,6 @@ class LendingLedger {
             
             this.saveData('transactions', this.transactions);
             this.renderTransactions();
-            this.renderLoans(); // Update loan net due amounts
             this.updateDashboard();
         }
     }
@@ -511,9 +568,10 @@ class LendingLedger {
             row.innerHTML = `
                 <td>${transaction.id}</td>
                 <td>${transaction.loanId}</td>
-                <td><span class="badge ${transaction.type === 'credit' ? 'badge-success' : 'badge-danger'}">${transaction.type.toUpperCase()}</span></td>
-                <td>₹${transaction.amount.toFixed(2)}</td>
-                <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                <td><span class="badge ${transaction.type === 'credit' ? 'badge-success' : (transaction.type === 'debit' ? 'badge-danger' : 'badge')}">${transaction.type.toUpperCase()}</span></td>
+                <td>${this.formatCurrency(transaction.amount)}</td>
+                <td>${transaction.description ? transaction.description : '-'}</td>
+                <td>${this.formatDate(transaction.date)}</td>
                 <td>
                     <button class="btn btn-primary btn-sm" onclick="app.openTransactionModal(${transaction.id})">
                         <i class="fas fa-edit"></i> Edit
@@ -570,21 +628,13 @@ class LendingLedger {
         // Calculate total outstanding amount
         let totalOutstanding = 0;
         this.loans.forEach(loan => {
-            const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
-            let netDue = 0;
-            loanTransactions.forEach(transaction => {
-                if (transaction.type === 'credit') {
-                    netDue -= transaction.amount;
-                } else if (transaction.type === 'debit') {
-                    netDue += transaction.amount;
-                }
-            });
+            const netDue = this.calculateNetDue(loan.id);
             totalOutstanding += netDue;
         });
 
         document.getElementById('total-customers').textContent = totalCustomers;
         document.getElementById('total-loans').textContent = totalLoans;
-        document.getElementById('total-outstanding').textContent = `₹${totalOutstanding.toFixed(2)}`;
+        document.getElementById('total-outstanding').textContent = this.formatCurrency(totalOutstanding);
         document.getElementById('total-transactions').textContent = totalTransactions;
     }
 
@@ -596,6 +646,48 @@ class LendingLedger {
     setDefaultDate() {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('transaction-date').value = today;
+    }
+
+    // Formatting and calculations
+    formatCurrency(amount) {
+        const formatter = new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        return formatter.format(Number(amount) || 0);
+    }
+
+    formatDate(value) {
+        return new Date(value).toLocaleDateString();
+    }
+
+    getLoanTransactions(loanId) {
+        return this.transactions.filter(t => t.loanId === loanId);
+    }
+
+    calculateNetDue(loanId) {
+        const loanTransactions = this.getLoanTransactions(loanId);
+        let netDue = 0;
+        loanTransactions.forEach(transaction => {
+            if (transaction.type === 'credit') {
+                netDue -= transaction.amount; // Payment reduces due amount
+            } else if (transaction.type === 'debit') {
+                netDue += transaction.amount; // Disbursement increases due amount
+            }
+        });
+        return netDue;
+    }
+
+    calculateTransactionTotals(transactions) {
+        let totalCredit = 0;
+        let totalDebit = 0;
+        transactions.forEach(t => {
+            if (t.type === 'credit') totalCredit += t.amount;
+            else if (t.type === 'debit') totalDebit += t.amount;
+        });
+        return { totalCredit, totalDebit, netAmount: totalDebit - totalCredit };
     }
 
     // Helper function to format collateral items display
@@ -677,15 +769,7 @@ class LendingLedger {
         
         customerLoans.forEach(loan => {
             // Calculate net due for this loan
-            const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
-            let netDue = 0;
-            loanTransactions.forEach(transaction => {
-                if (transaction.type === 'credit') {
-                    netDue -= transaction.amount;
-                } else if (transaction.type === 'debit') {
-                    netDue += transaction.amount;
-                }
-            });
+            const netDue = this.calculateNetDue(loan.id);
             totalOutstanding += netDue;
             
             // Count collateral items
@@ -714,7 +798,7 @@ class LendingLedger {
                         <i class="fas fa-dollar-sign"></i>
                     </div>
                     <div class="summary-content">
-                        <h3 class="${totalOutstanding > 0 ? 'text-danger' : 'text-success'}">₹${totalOutstanding.toFixed(2)}</h3>
+                        <h3 class="${totalOutstanding > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(totalOutstanding)}</h3>
                         <p>Total Outstanding</p>
                     </div>
                 </div>
@@ -746,15 +830,7 @@ class LendingLedger {
 
         customerLoans.forEach(loan => {
             // Calculate net due
-            const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
-            let netDue = 0;
-            loanTransactions.forEach(transaction => {
-                if (transaction.type === 'credit') {
-                    netDue -= transaction.amount;
-                } else if (transaction.type === 'debit') {
-                    netDue += transaction.amount;
-                }
-            });
+            const netDue = this.calculateNetDue(loan.id);
 
             // Format collateral items display using helper function
             const collateralDisplay = this.formatCollateralItems(loan);
@@ -764,10 +840,13 @@ class LendingLedger {
                 <td>${loan.id}</td>
                 <td>${loan.interestRate}%</td>
                 <td>${collateralDisplay}</td>
-                <td class="${netDue > 0 ? 'text-danger' : 'text-success'}">₹${netDue.toFixed(2)}</td>
+                <td class="${netDue > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(netDue)}</td>
                 <td>
                     <button class="btn btn-info btn-sm" onclick="app.viewLoanTransactions(${loan.id})">
                         <i class="fas fa-list"></i> View Transactions
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="app.openTransactionModal(null, ${loan.id}); app.closeModal('customer-loans-modal');">
+                        <i class="fas fa-plus"></i> Add Transaction
                     </button>
                     <button class="btn btn-primary btn-sm" onclick="app.openLoanModal(${loan.id}); app.closeModal('customer-loans-modal');">
                         <i class="fas fa-edit"></i> Edit
@@ -791,16 +870,54 @@ class LendingLedger {
             `;
         } else {
             transactionsTbody.innerHTML = '';
+            // Compute schedule entries
+            let schedule = { entries: [], today: null };
+            if (window.Finance) {
+                const loan = this.loans.find(l => l.id === loanId);
+                schedule = window.Finance.calculateLoanSchedule(loan, loanTransactions);
+            }
+            const mapDateToDue = new Map(schedule.entries.map(e => [e.date, e]));
+
+            // Header may need dues columns
+            const thead = document.querySelector('#customer-transactions-table thead tr');
+            if (thead && thead.children.length === 4) {
+                thead.innerHTML = `
+                    <th>Transaction ID</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Principal Due</th>
+                    <th>Interest Due</th>
+                `;
+            }
+
             loanTransactions.forEach(transaction => {
                 const row = document.createElement('tr');
+                const due = mapDateToDue.get(transaction.date);
                 row.innerHTML = `
                     <td>${transaction.id}</td>
                     <td><span class="badge ${transaction.type === 'credit' ? 'badge-success' : 'badge-danger'}">${transaction.type.toUpperCase()}</span></td>
-                    <td>₹${transaction.amount.toFixed(2)}</td>
-                    <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                    <td>${this.formatCurrency(transaction.amount)}</td>
+                    <td>${this.formatDate(transaction.date)}</td>
+                    <td>${due ? this.formatCurrency(due.principalDue) : '-'}</td>
+                    <td>${due ? this.formatCurrency(due.interestDue) : '-'}</td>
                 `;
                 transactionsTbody.appendChild(row);
             });
+
+            // Append Today row
+            if (schedule.today) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>—</td>
+                    <td><span class="badge badge-info">TODAY</span></td>
+                    <td>—</td>
+                    <td>${this.formatDate(schedule.today.date)}</td>
+                    <td>${this.formatCurrency(schedule.today.principalDue)}</td>
+                    <td>${this.formatCurrency(schedule.today.interestDue)}</td>
+                `;
+                transactionsTbody.appendChild(row);
+            }
         }
         
         transactionsSection.style.display = 'block';
@@ -825,6 +942,25 @@ class LendingLedger {
         // Populate loan info
         this.populateSelectedLoanInfo(loan, customerName);
         
+        // Add calculate button and results slot
+        const loanInfoCard = document.getElementById('selected-loan-info');
+        const existingCalcBar = loanInfoCard.querySelector('.calc-bar');
+        if (!existingCalcBar) {
+            const calcBar = document.createElement('div');
+            calcBar.className = 'calc-bar';
+            calcBar.style.display = 'flex';
+            calcBar.style.justifyContent = 'space-between';
+            calcBar.style.alignItems = 'center';
+            calcBar.style.marginTop = '10px';
+            calcBar.innerHTML = `
+                <button class="btn btn-primary btn-sm" id="calculate-loan-dues-btn">
+                    <i class="fas fa-calculator"></i> Calculate
+                </button>
+                <div id="loan-dues-results" class="loan-dues-results"></div>
+            `;
+            loanInfoCard.appendChild(calcBar);
+        }
+
         // Populate transactions summary
         this.populateLoansTransactionsSummary(loanTransactions);
         
@@ -836,6 +972,33 @@ class LendingLedger {
         
         // Scroll to transactions section
         document.getElementById('loan-transactions-section').scrollIntoView({ behavior: 'smooth' });
+
+        // Wire calculate button
+        const calcBtn = document.getElementById('calculate-loan-dues-btn');
+        if (calcBtn) {
+            calcBtn.onclick = () => this.calculateAndRenderLoanDues(loan);
+        }
+    }
+
+    calculateAndRenderLoanDues(loan) {
+        if (!window.Finance) {
+            alert('Finance module not loaded');
+            return;
+        }
+        const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
+        const result = window.Finance.calculateLoanDues(loan, loanTransactions);
+        const el = document.getElementById('loan-dues-results');
+        if (el) {
+            el.innerHTML = `
+                <div class="summary-cards" style="margin-top: 10px;">
+                    <div class="summary-card"><div class="summary-content"><p>Principal Disbursed</p><h3>${this.formatCurrency(result.principalDisbursed)}</h3></div></div>
+                    <div class="summary-card"><div class="summary-content"><p>Payments Received</p><h3>${this.formatCurrency(result.paymentsReceived)}</h3></div></div>
+                    <div class="summary-card"><div class="summary-content"><p>Principal Due</p><h3 class="${result.principalDue > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(result.principalDue)}</h3></div></div>
+                    <div class="summary-card"><div class="summary-content"><p>Interest Due</p><h3 class="${result.interestDue > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(result.interestDue)}</h3></div></div>
+                    <div class="summary-card"><div class="summary-content"><p>Total Due</p><h3 class="${result.totalDue > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(result.totalDue)}</h3></div></div>
+                </div>
+            `;
+        }
     }
 
     hideLoanTransactions() {
@@ -847,15 +1010,7 @@ class LendingLedger {
         const collateralDisplay = this.formatCollateralItems(loan);
         
         // Calculate net due
-        const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
-        let netDue = 0;
-        loanTransactions.forEach(transaction => {
-            if (transaction.type === 'credit') {
-                netDue -= transaction.amount;
-            } else if (transaction.type === 'debit') {
-                netDue += transaction.amount;
-            }
-        });
+        const netDue = this.calculateNetDue(loan.id);
         
         loanInfo.innerHTML = `
             <div class="selected-loan-details">
@@ -875,7 +1030,7 @@ class LendingLedger {
                     </div>
                     <div class="detail-item">
                         <label>Net Due:</label>
-                        <span class="${netDue > 0 ? 'text-danger' : 'text-success'}">₹${netDue.toFixed(2)}</span>
+                        <span class="${netDue > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(netDue)}</span>
                     </div>
                     <div class="detail-item full-width">
                         <label>Collateral Items:</label>
@@ -890,18 +1045,7 @@ class LendingLedger {
         const summary = document.getElementById('loans-transactions-summary');
         
         const totalTransactions = loanTransactions.length;
-        let totalCredit = 0;
-        let totalDebit = 0;
-        
-        loanTransactions.forEach(transaction => {
-            if (transaction.type === 'credit') {
-                totalCredit += transaction.amount;
-            } else if (transaction.type === 'debit') {
-                totalDebit += transaction.amount;
-            }
-        });
-        
-        const netAmount = totalDebit - totalCredit;
+        const { totalCredit, totalDebit, netAmount } = this.calculateTransactionTotals(loanTransactions);
         
         summary.innerHTML = `
             <div class="summary-cards">
@@ -919,7 +1063,7 @@ class LendingLedger {
                         <i class="fas fa-arrow-up text-success"></i>
                     </div>
                     <div class="summary-content">
-                        <h3>₹${totalDebit.toFixed(2)}</h3>
+                        <h3>${this.formatCurrency(totalDebit)}</h3>
                         <p>Total Disbursed</p>
                     </div>
                 </div>
@@ -928,7 +1072,7 @@ class LendingLedger {
                         <i class="fas fa-arrow-down text-danger"></i>
                     </div>
                     <div class="summary-content">
-                        <h3>₹${totalCredit.toFixed(2)}</h3>
+                        <h3>${this.formatCurrency(totalCredit)}</h3>
                         <p>Total Received</p>
                     </div>
                 </div>
@@ -937,7 +1081,7 @@ class LendingLedger {
                         <i class="fas fa-balance-scale"></i>
                     </div>
                     <div class="summary-content">
-                        <h3 class="${netAmount > 0 ? 'text-danger' : 'text-success'}">₹${netAmount.toFixed(2)}</h3>
+                        <h3 class="${netAmount > 0 ? 'text-danger' : 'text-success'}">${this.formatCurrency(netAmount)}</h3>
                         <p>Net Outstanding</p>
                     </div>
                 </div>
@@ -966,8 +1110,8 @@ class LendingLedger {
             row.innerHTML = `
                 <td>${transaction.id}</td>
                 <td><span class="badge ${transaction.type === 'credit' ? 'badge-success' : 'badge-danger'}">${transaction.type.toUpperCase()}</span></td>
-                <td>₹${transaction.amount.toFixed(2)}</td>
-                <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                <td>${this.formatCurrency(transaction.amount)}</td>
+                <td>${this.formatDate(transaction.date)}</td>
                 <td>
                     <button class="btn btn-primary btn-sm" onclick="app.openTransactionModal(${transaction.id})">
                         <i class="fas fa-edit"></i> Edit
@@ -1180,178 +1324,26 @@ class LendingLedger {
     }
 
     // CSV Export Methods
-    exportToCSV(dataType) {
-        console.log('Exporting CSV for:', dataType); // Debug log
-        let csvContent = '';
-        let filename = '';
-        
-        switch(dataType) {
-            case 'customers':
-                csvContent = this.convertCustomersToCSV();
-                filename = `customers_${this.getCurrentDate()}.csv`;
-                break;
-            case 'loans':
-                csvContent = this.convertLoansToCSV();
-                filename = `loans_${this.getCurrentDate()}.csv`;
-                break;
-            case 'transactions':
-                csvContent = this.convertTransactionsToCSV();
-                filename = `transactions_${this.getCurrentDate()}.csv`;
-                break;
-        }
-        
-        console.log('CSV Content preview:', csvContent.substring(0, 200)); // Debug log
-        console.log('Filename:', filename); // Debug log
-        this.downloadCSV(csvContent, filename);
-    }
+    // Export moved to ImportExport module
 
-    exportAllData() {
-        const allData = {
-            customers: this.customers,
-            loans: this.loans,
-            transactions: this.transactions,
-            rates: this.rates,
-            exportDate: new Date().toISOString(),
-            version: '1.0'
-        };
-        
-        const jsonContent = JSON.stringify(allData, null, 2);
-        const filename = `lending_ledger_backup_${this.getCurrentDate()}.json`;
-        this.downloadFile(jsonContent, filename, 'application/json');
-    }
+    // Export moved to ImportExport module
 
-    convertCustomersToCSV() {
-        const headers = ['ID', 'Name', 'Father Name', 'Address'];
-        const rows = this.customers.map(customer => [
-            customer.id,
-            customer.name,
-            customer.fatherName,
-            customer.address
-        ]);
-        
-        return [headers, ...rows].map(row => 
-            row.map(field => `"${field}"`).join(',')
-        ).join('\n');
-    }
+    // Export moved to ImportExport module
 
-    convertLoansToCSV() {
-        const headers = ['Loan ID', 'Customer ID', 'Customer Name', 'Interest Rate', 'Collateral Items', 'Net Due'];
-        const rows = this.loans.map(loan => {
-            const customer = this.customers.find(c => c.id === loan.customerId);
-            const customerName = customer ? customer.name : 'Unknown';
-            
-            // Calculate net due
-            const loanTransactions = this.transactions.filter(t => t.loanId === loan.id);
-            let netDue = 0;
-            loanTransactions.forEach(transaction => {
-                if (transaction.type === 'credit') {
-                    netDue -= transaction.amount;
-                } else if (transaction.type === 'debit') {
-                    netDue += transaction.amount;
-                }
-            });
-            
-            // Format collateral items using helper function
-            const collateralDisplay = this.formatCollateralItems(loan);
-            
-            return [
-                loan.id,
-                loan.customerId,
-                customerName,
-                loan.interestRate,
-                collateralDisplay,
-                netDue.toFixed(2)
-            ];
-        });
-        
-        return [headers, ...rows].map(row => 
-            row.map(field => `"${field}"`).join(',')
-        ).join('\n');
-    }
+    // Export moved to ImportExport module
 
-    convertTransactionsToCSV() {
-        const headers = ['Transaction ID', 'Loan ID', 'Customer Name', 'Type', 'Amount', 'Date'];
-        const rows = this.transactions.map(transaction => {
-            const loan = this.loans.find(l => l.id === transaction.loanId);
-            const customer = loan ? this.customers.find(c => c.id === loan.customerId) : null;
-            const customerName = customer ? customer.name : 'Unknown';
-            
-            return [
-                transaction.id,
-                transaction.loanId,
-                customerName,
-                transaction.type.toUpperCase(),
-                transaction.amount,
-                transaction.date
-            ];
-        });
-        
-        return [headers, ...rows].map(row => 
-            row.map(field => `"${field}"`).join(',')
-        ).join('\n');
-    }
+    // Export moved to ImportExport module
 
-    downloadCSV(content, filename) {
-        // Ensure filename has .csv extension
-        if (!filename.toLowerCase().endsWith('.csv')) {
-            filename += '.csv';
-        }
-        // Add BOM for proper UTF-8 encoding in Excel
-        const csvContent = '\uFEFF' + content;
-        this.downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
-    }
+    // Export moved to ImportExport module
 
-    downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-    }
+    // Export moved to ImportExport module
 
-    getCurrentDate() {
-        return new Date().toISOString().split('T')[0];
-    }
+    // Export moved to ImportExport module
 
     // CSV Import Methods
-    importFromCSV(dataType) {
-        const input = document.getElementById('import-file');
-        input.dataset.importType = dataType;
-        input.click();
-    }
+    // Export moved to ImportExport module
 
-    handleFileImport(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const content = e.target.result;
-            const importType = event.target.dataset.importType;
-            
-            try {
-                switch(importType) {
-                    case 'customers':
-                        this.importCustomersFromCSV(content);
-                        break;
-                    case 'loans':
-                        this.importLoansFromCSV(content);
-                        break;
-                    case 'transactions':
-                        this.importTransactionsFromCSV(content);
-                        break;
-                }
-            } catch (error) {
-                alert('Error importing file: ' + error.message);
-            }
-        };
-        
-        reader.readAsText(file);
-    }
+    // Export moved to ImportExport module
 
     importCustomersFromCSV(content) {
         const lines = content.split('\n').filter(line => line.trim());
@@ -1408,7 +1400,6 @@ class LendingLedger {
         this.loans = [...this.loans, ...newLoans];
         this.saveData('loans', this.loans);
         this.saveData('currentLoanId', this.currentLoanId);
-        this.renderLoans();
         this.updateDashboard();
         
         alert(`Successfully imported ${newLoans.length} loans! Note: Collateral items were set to placeholder values. Please edit each loan to add proper collateral details.`);
@@ -1416,78 +1407,109 @@ class LendingLedger {
 
     importTransactionsFromCSV(content) {
         const lines = content.split('\n').filter(line => line.trim());
-        const headers = lines[0].split(',').map(h => h.replace(/"/g, ''));
-        
+        if (lines.length <= 1) return alert('No transaction rows found.');
+        const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+
+        const colIndex = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+        const idxId = colIndex('Transaction ID');
+        const idxLoanId = colIndex('Loan ID');
+        const idxCustomerName = colIndex('Customer Name');
+        const idxType = colIndex('Type');
+        const idxAmount = colIndex('Amount');
+        const idxDescription = colIndex('Description');
+        const idxDate = colIndex('Date');
+
         const newTransactions = [];
+        const createdLoans = new Set();
+        const createdCustomers = new Set();
+
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',').map(v => v.replace(/"/g, ''));
-            if (values.length >= 6) {
-                newTransactions.push({
-                    id: parseInt(values[0]) || this.currentTransactionId++,
-                    loanId: parseInt(values[1]),
-                    type: values[3].toLowerCase(),
-                    amount: parseFloat(values[4]),
-                    date: values[5]
-                });
+            if (idxLoanId === -1 || idxType === -1 || idxAmount === -1 || idxDate === -1) continue;
+
+            const parsedId = idxId >= 0 ? parseInt(values[idxId]) : NaN;
+            const loanId = parseInt(values[idxLoanId]);
+            const type = (values[idxType] || '').toLowerCase();
+            const amount = parseFloat(values[idxAmount]);
+            const description = idxDescription >= 0 ? (values[idxDescription] || '') : '';
+            const date = values[idxDate];
+
+            // Ensure loan exists; create if missing
+            let loan = this.loans.find(l => l.id === loanId);
+            if (!loan) {
+                // Determine customer from CSV (optional)
+                let customerId = null;
+                const customerNameCsv = idxCustomerName >= 0 ? (values[idxCustomerName] || '').trim() : '';
+                if (customerNameCsv) {
+                    let customer = this.customers.find(c => (c.name || '').trim().toLowerCase() === customerNameCsv.toLowerCase());
+                    if (!customer) {
+                        customer = { id: this.currentCustomerId++, name: customerNameCsv, fatherName: '', address: '' };
+                        this.customers.push(customer);
+                        createdCustomers.add(customer.id);
+                    }
+                    customerId = customer.id;
+                } else {
+                    // Fallback: create placeholder customer
+                    const placeholderName = `Customer-${loanId}`;
+                    const customer = { id: this.currentCustomerId++, name: placeholderName, fatherName: '', address: '' };
+                    this.customers.push(customer);
+                    createdCustomers.add(customer.id);
+                    customerId = customer.id;
+                }
+
+                loan = {
+                    id: loanId,
+                    customerId,
+                    interestRate: this.rates.defaultInterestRate,
+                    collateralItems: [],
+                    netDue: 0
+                };
+                this.loans.push(loan);
+                createdLoans.add(loanId);
+            }
+
+            // Create transaction
+            const transaction = {
+                id: Number.isFinite(parsedId) ? parsedId : this.currentTransactionId++,
+                loanId,
+                type,
+                amount: Number.isFinite(amount) ? amount : 0,
+                description,
+                date
+            };
+            newTransactions.push(transaction);
+
+            // If this is a COLLATERAL type, optionally map description to collateralItems (best-effort)
+            if (type === 'collateral' && description) {
+                const items = description.split(',').map(s => s.trim()).filter(Boolean);
+                const parsedItems = items.map(txt => ({ name: txt, metalType: 'gold', weight: 0, purity: 0, netWeight: 0 }));
+                if (parsedItems.length) {
+                    loan.collateralItems = parsedItems;
+                }
             }
         }
-        
+
+        // Merge and save
         this.transactions = [...this.transactions, ...newTransactions];
+        this.saveData('customers', this.customers);
+        this.saveData('loans', this.loans);
         this.saveData('transactions', this.transactions);
+        this.saveData('currentCustomerId', this.currentCustomerId);
+        this.saveData('currentLoanId', this.currentLoanId);
         this.saveData('currentTransactionId', this.currentTransactionId);
+
+        this.renderCustomers();
         this.renderTransactions();
-        this.renderLoans(); // Update loan net due amounts
         this.updateDashboard();
-        
-        alert(`Successfully imported ${newTransactions.length} transactions!`);
+        this.updateRates();
+
+        alert(`Imported ${newTransactions.length} transactions. Created ${createdLoans.size} loans and ${createdCustomers.size} customers from transactions.`);
     }
 
     // Backup Methods
-    createBackup() {
-        this.exportAllData();
-        alert('Backup created successfully!');
-    }
+    // Export moved to ImportExport module
 
-    restoreBackup() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const backupData = JSON.parse(e.target.result);
-                    
-                    if (confirm('This will replace all current data. Are you sure?')) {
-                        this.customers = backupData.customers || [];
-                        this.loans = backupData.loans || [];
-                        this.transactions = backupData.transactions || [];
-                        this.rates = backupData.rates || { goldRate: 0, silverRate: 0 };
-                        
-                        this.saveData('customers', this.customers);
-                        this.saveData('loans', this.loans);
-                        this.saveData('transactions', this.transactions);
-                        this.saveData('rates', this.rates);
-                        
-                        this.renderCustomers();
-                        this.renderLoans();
-                        this.renderTransactions();
-                        this.updateDashboard();
-                        this.updateRates();
-                        
-                        alert('Data restored successfully!');
-                    }
-                } catch (error) {
-                    alert('Error restoring backup: ' + error.message);
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
-    }
+    // Export moved to ImportExport module
 }
 
 // Initialize the application

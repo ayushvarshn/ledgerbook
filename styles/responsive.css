@@ -1,0 +1,18 @@
+/* Responsive adjustments */
+@media (max-width: 768px) {
+	.container { padding: 10px; }
+	.header { padding: 12px; }
+	.header-content h1 { font-size: 1.3rem; }
+	.main-content { padding: 12px; }
+	.nav { flex-direction: column; }
+	.section-header { flex-direction: column; gap: 10px; align-items: stretch; }
+	.dashboard-grid { grid-template-columns: 1fr; }
+	.form-actions { flex-direction: column; }
+	.filters-row { grid-template-columns: 1fr; }
+	.rates-container { grid-template-columns: 1fr; }
+	.data-management-container { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+	.summary-cards { grid-template-columns: 1fr; }
+}
