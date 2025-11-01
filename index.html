@@ -90,24 +90,13 @@
             <section id="customers" class="section">
                 <div class="section-header">
                     <h2><i class="fas fa-users"></i> Customers</h2>
-                    <button class="btn btn-primary" id="add-customer-btn">
-                        <i class="fas fa-plus"></i> Add Customer
-                    </button>
-                </div>
-                <div class="filter-bar">
-                    <div class="filters-row">
-                        <div class="form-group">
-                            <label for="customer-filter-name">Name</label>
-                            <input type="text" id="customer-filter-name" placeholder="Search Name">
-                        </div>
-                        <div class="form-group">
-                            <label for="customer-filter-father">Father's Name</label>
-                            <input type="text" id="customer-filter-father" placeholder="Search Father's Name">
-                        </div>
-                        <div class="form-group">
-                            <label for="customer-filter-address">Address</label>
-                            <input type="text" id="customer-filter-address" placeholder="Search Address">
-                        </div>
+                    <div class="section-actions">
+                        <button class="btn btn-primary" id="add-customer-btn">
+                            <i class="fas fa-plus"></i> Add Customer
+                        </button>
+                        <button class="btn btn-secondary" id="clear-customer-filters">
+                            <i class="fas fa-times"></i> Clear Filters
+                        </button>
                     </div>
                 </div>
                 <div class="table-container">
@@ -119,6 +108,13 @@
                                 <th>Father's Name</th>
                                 <th>Address</th>
                                 <th>Actions</th>
+                            </tr>
+                            <tr>
+                                <th><input type="text" class="table-filter-input" id="cust-filter-id" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input" id="cust-filter-name" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input" id="cust-filter-father" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input" id="cust-filter-address" placeholder="Search"></th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="customers-tbody">
@@ -133,9 +129,14 @@
             <section id="transactions" class="section">
                 <div class="section-header">
                     <h2><i class="fas fa-exchange-alt"></i> Transactions</h2>
-                    <button class="btn btn-primary" id="add-transaction-btn">
-                        <i class="fas fa-plus"></i> Add Transaction
-                    </button>
+                    <div class="section-actions">
+                        <button class="btn btn-primary" id="add-transaction-btn">
+                            <i class="fas fa-plus"></i> Add Transaction
+                        </button>
+                        <button class="btn btn-secondary" id="clear-transaction-filters">
+                            <i class="fas fa-times"></i> Clear Filters
+                        </button>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table class="data-table" id="transactions-table">
@@ -143,11 +144,31 @@
                             <tr>
                                 <th>Transaction ID</th>
                                 <th>Loan ID</th>
+                                <th>Customer</th>
+                                <th>Loan Details</th>
                                 <th>Type</th>
                                 <th>Amount</th>
-                                <th>Description</th>
+                                <th>Items</th>
+                                <th>Note</th>
                                 <th>Date</th>
                                 <th>Actions</th>
+                            </tr>
+                            <tr>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-id" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-loanId" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-customer" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-loanDetails" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-type" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-amount" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-description" placeholder="Search"></th>
+                                <th><input type="text" class="table-filter-input tx-filter-input" id="tx-filter-note" placeholder="Search"></th>
+                                <th>
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        <input type="date" class="table-filter-input tx-filter-input" id="tx-filter-date-from" placeholder="From">
+                                        <input type="date" class="table-filter-input tx-filter-input" id="tx-filter-date-to" placeholder="To">
+                                    </div>
+                                </th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="transactions-tbody">
@@ -179,13 +200,13 @@
                         </div>
                     </div>
                     <div class="rate-card">
-                        <h3>Default Interest Rate</h3>
+                        <h3>Default Monthly Interest Rate</h3>
                         <div class="rate-input">
-                            <span>%</span>
-                            <input type="number" id="default-interest-rate" step="0.01" placeholder="Enter default interest rate">
+                            <span>%/mo</span>
+                            <input type="number" id="default-interest-rate" step="0.01" placeholder="Enter default monthly interest rate">
                             <button class="btn btn-primary" id="update-default-interest-rate">Update</button>
                         </div>
-                        <p class="rate-description">This rate will be applied to all new loans by default</p>
+                        <p class="rate-description">This monthly rate will be applied to all new loans by default</p>
                     </div>
                 </div>
             </section>
@@ -219,7 +240,7 @@
                         <h3>Import Data</h3>
                         <p>Import data from CSV files</p>
                         <div class="import-buttons">
-                            <input type="file" id="import-file" accept=".csv" style="display: none;">
+                            <input type="file" id="import-file" accept=".csv,.xlsx" style="display: none;">
                             <button class="btn btn-primary" id="import-customers">
                                 <i class="fas fa-upload"></i> Import Customers
                             </button>
@@ -228,6 +249,9 @@
                             </button>
                             <button class="btn btn-primary" id="import-transactions">
                                 <i class="fas fa-upload"></i> Import Transactions
+                            </button>
+                            <button class="btn btn-info" id="import-legacy">
+                                <i class="fas fa-file-upload"></i> Upload Legacy
                             </button>
                         </div>
                     </div>
@@ -241,6 +265,9 @@
                             </button>
                             <button class="btn btn-info" id="restore-backup">
                                 <i class="fas fa-undo"></i> Restore Backup
+                            </button>
+                            <button class="btn" id="toggle-auto-backup">
+                                <i class="fas fa-clock"></i> Enable Auto Backup (Hourly)
                             </button>
                         </div>
                     </div>
@@ -292,6 +319,10 @@
                         <option value="">Select Customer</option>
                     </select>
                 </div>
+                <div class="form-group" id="interest-rate-group">
+                    <label for="loan-interest-rate">Interest Rate (% per month) *</label>
+                    <input type="number" id="loan-interest-rate" step="0.01" required>
+                </div>
                 <div class="form-group">
                     <label>Collateral Items *</label>
                     <div id="collateral-items-container">
@@ -305,7 +336,7 @@
                             <div class="collateral-fields">
                                 <div class="form-group">
                                     <label>Item Name *</label>
-                                    <input type="text" class="collateral-item-name" placeholder="e.g., Gold Chain, Silver Ring" required>
+                                    <input type="text" class="collateral-item-name" placeholder="e.g., Chain, Ring" required>
                                 </div>
                                 <div class="form-group">
                                     <label>Metal Type *</label>
@@ -330,10 +361,13 @@
                         <i class="fas fa-plus"></i> Add Another Item
                     </button>
                 </div>
+                <div class="form-group">
+                    <label for="loan-date">Date *</label>
+                    <input type="date" id="loan-date" required>
+                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancel-loan">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save</button>
-                    <button type="button" class="btn btn-info" id="calculate-loan-modal">Calculate</button>
                 </div>
             </form>
         </div>
@@ -359,15 +393,20 @@
                         <option value="">Select Type</option>
                         <option value="credit">Credit (Payment)</option>
                         <option value="debit">Debit (Disbursement)</option>
+                        <option value="return_items">Return Items</option>
                     </select>
+                </div>
+                <div class="form-group" id="return-items-container" style="display: none;">
+                    <label>Return Collateral Items</label>
+                    <div id="return-items-list"></div>
                 </div>
                 <div class="form-group">
                     <label for="transaction-amount">Amount (₹) *</label>
                     <input type="number" id="transaction-amount" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="transaction-description">Description</label>
-                    <input type="text" id="transaction-description" placeholder="e.g., Gold Chain 22g (91%), Silver Ring 45g (60%)">
+                    <label for="transaction-note">Note</label>
+                    <input type="text" id="transaction-note" placeholder="Optional note">
                 </div>
                 <div class="form-group">
                     <label for="transaction-date">Date *</label>
@@ -444,8 +483,11 @@
     <script src="js/customers.js"></script>
     <script src="js/transactions.js"></script>
     <script src="js/db.js"></script>
+    <!-- Optional XLSX support for Excel imports -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="js/import_export.js"></script>
     <script src="finance.js"></script>
+    <script src="js/filtering.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
