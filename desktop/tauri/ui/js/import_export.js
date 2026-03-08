@@ -1,10 +1,6 @@
 (function (global) {
 	'use strict';
 
-	/**
-	 * Import/Export/Backup handlers
-	 * @namespace ImportExport
-	 */
 	const ImportExport = {
 		exportToCSV(app, dataType) {
 			let csvContent = '';
@@ -51,7 +47,6 @@
 			const rows = app.loans.map(loan => {
 				const customer = app.customers.find(c => c.id === loan.customerId);
 				const customerName = customer ? customer.name : 'Unknown';
-				// Prefer stored interest-aware values, fallback to principal-only calc
 				const netPrincipal = (typeof loan.netPrincipal === 'number') ? loan.netPrincipal
 					: (typeof loan.netDue === 'number') ? loan.netDue
 					: app.calculateNetDue(loan.id);
@@ -144,7 +139,6 @@
 				reader.readAsArrayBuffer(file);
 				return;
 			}
-			// Default CSV path
 			const reader = new FileReader();
 			reader.onload = (e) => {
 				const content = e.target.result;
@@ -162,7 +156,6 @@
 			reader.readAsText(file);
 		},
 
-		// Legacy CSV importer
 		importLegacyFromCSV(app, content) {
 			const lines = content.split(/\r?\n/).filter(line => line.trim());
 			if (lines.length <= 1) return alert('No legacy rows found.');
@@ -174,7 +167,6 @@
 			const idxVillage = headers.findIndex(h => /village/i.test(h));
 			const idxParticulars = headers.findIndex(h => /particulars|collateral/i.test(h));
 
-			// Identify debit/credit columns pairs
 			const debitPairs = [];
 			const creditPairs = [];
 			for (let i = 0; i < headers.length; i++) {
@@ -201,14 +193,12 @@
 				const village = idxVillage >= 0 ? values[idxVillage] : '';
 				const particularsRaw = idxParticulars >= 0 ? values[idxParticulars] : '';
 
-				// Ensure customer
 				let customer = app.customers.find(c => (c.name||'').trim().toLowerCase() === name.toLowerCase() && (c.fatherName||'').trim().toLowerCase() === father.toLowerCase());
 				if (!customer) {
 					customer = { id: app.currentCustomerId++, name, fatherName: father, address: village };
 					app.customers.push(customer);
 				}
 
-				// Create loan
 				const loan = {
 					id: app.currentLoanId++,
 					customerId: customer.id,
@@ -221,10 +211,8 @@
 				};
 				app.loans.push(loan);
 
-				// Create collateral transaction
 				app.transactions.push({ id: app.currentTransactionId++, loanId: loan.id, type: 'collateral', amount: 0, description: app.formatCollateralItems(loan), date: loan.netDate });
 
-				// Debits
 				debitPairs.forEach(pair => {
 					const amtStr = values[pair.amtIdx] || '';
 					const amt = parseFloat(amtStr);
@@ -233,7 +221,6 @@
 						app.transactions.push({ id: app.currentTransactionId++, loanId: loan.id, type: 'debit', amount: amt, description: '', date });
 					}
 				});
-				// Credits
 				creditPairs.forEach(pair => {
 					const amtStr = values[pair.amtIdx] || '';
 					const amt = parseFloat(amtStr);
@@ -243,7 +230,6 @@
 					}
 				});
 
-				// Update effective principal for the loan
 				app.updateLoanEffectivePrincipal(loan.id);
 				createdCount++;
 			}
@@ -266,20 +252,15 @@
 				.replace(/\r/g, '\n')
 				.replace(/Sona/gi, 'Gold')
 				.replace(/Chandi/gi, 'Silver');
-			// Split by commas, periods, or newlines
 			const parts = norm.split(/[\n,\.]+/).map(s => s.trim()).filter(Boolean);
 			parts.forEach(part => {
-				// Remove hyphen separators
 				const cleaned = part.replace(/\s*-\s*/g, ' ').replace(/\s+/g, ' ').trim();
-				// Extract weight (number before g or gm)
 				const weightMatch = cleaned.match(/([0-9]+(?:\.[0-9]+)?)\s*(?:gm|g)\b/i);
 				let weight = 0;
 				if (weightMatch) weight = parseFloat(weightMatch[1]);
-				// Determine metal
 				let metalType = '';
 				if (/\bgold\b/i.test(cleaned)) metalType = 'gold';
 				else if (/\bsilver\b/i.test(cleaned)) metalType = 'silver';
-				// Name is the words between metal and weight
 				let name = cleaned;
 				if (metalType) {
 					name = name.replace(/\bgold\b/i, '').replace(/\bsilver\b/i, '').trim();
@@ -322,60 +303,10 @@
 				reader.readAsText(file);
 			};
 			input.click();
-		},
-
-		// Auto-backup (hourly) via File System Access API (Chromium)
-		autoBackupState: { timerId: null, dirHandle: null },
-		isAutoBackupEnabled() { return !!ImportExport.autoBackupState.timerId && !!ImportExport.autoBackupState.dirHandle; },
-		toggleAutoBackup(app) { return ImportExport.isAutoBackupEnabled() ? (ImportExport.disableAutoBackup(), false) : (ImportExport.enableAutoBackup(app), true); },
-		async enableAutoBackup(app) {
-			try {
-				if (!window.showDirectoryPicker) {
-					alert('Auto backup requires a Chromium browser with File System Access API.');
-					return;
-				}
-				const dirHandle = await window.showDirectoryPicker();
-				ImportExport.autoBackupState.dirHandle = dirHandle;
-				// write immediately
-				await ImportExport.writeBackupToDirectory(app);
-				// schedule hourly
-				if (ImportExport.autoBackupState.timerId) clearInterval(ImportExport.autoBackupState.timerId);
-				ImportExport.autoBackupState.timerId = setInterval(() => {
-					ImportExport.writeBackupToDirectory(app).catch(() => {});
-				}, 60 * 60 * 1000);
-				alert('Auto backup enabled. A backup will be written every hour. Keep this tab open.');
-			} catch (e) {
-				alert('Could not enable auto backup: ' + (e && e.message ? e.message : e));
-			}
-		},
-		disableAutoBackup() {
-			if (ImportExport.autoBackupState.timerId) {
-				clearInterval(ImportExport.autoBackupState.timerId);
-				ImportExport.autoBackupState.timerId = null;
-			}
-			ImportExport.autoBackupState.dirHandle = null;
-			alert('Auto backup disabled.');
-		},
-		async writeBackupToDirectory(app) {
-			const dir = ImportExport.autoBackupState.dirHandle;
-			if (!dir) throw new Error('No backup folder selected');
-			const stamp = new Date();
-			const pad = n => String(n).padStart(2, '0');
-			const name = `lending_ledger_backup_${stamp.getFullYear()}-${pad(stamp.getMonth()+1)}-${pad(stamp.getDate())}_${pad(stamp.getHours())}-${pad(stamp.getMinutes())}.json`;
-			const fileHandle = await dir.getFileHandle(name, { create: true });
-			const writable = await fileHandle.createWritable();
-			const payload = {
-				customers: app.customers,
-				loans: app.loans,
-				transactions: app.transactions,
-				rates: app.rates,
-				exportDate: new Date().toISOString(),
-				version: '1.0'
-			};
-			await writable.write(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-			await writable.close();
 		}
 	};
 
 	global.ImportExport = ImportExport;
 })(window);
+
+

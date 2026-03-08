@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/1",
+  "package": {
+    "productName": "Lending Ledger",
+    "version": "0.1.0"
+  },
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../ui",
+    "distDir": "../ui"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "title": "Lending Ledger",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "bundle": {
+      "identifier": "com.lending.ledger.tauri",
+      "resources": [
+        "../../../backend/**"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
+    "allowlist": {
+      "all": false
+    }
+  }
+}
+
+

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="styles/components.css">
     <link rel="stylesheet" href="styles/responsive.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
 </head>
 <body>
     <div class="container">
@@ -124,7 +125,7 @@
             </section>
 
             
-
+            
             <!-- Transactions Section -->
             <section id="transactions" class="section">
                 <div class="section-header">
@@ -266,9 +267,7 @@
                             <button class="btn btn-info" id="restore-backup">
                                 <i class="fas fa-undo"></i> Restore Backup
                             </button>
-                            <button class="btn" id="toggle-auto-backup">
-                                <i class="fas fa-clock"></i> Enable Auto Backup (Hourly)
-                            </button>
+                            
                         </div>
                     </div>
                 </div>
@@ -473,7 +472,6 @@
     </div>
 
     <script src="js/utils.js"></script>
-    <script src="js/storage.js"></script>
     <script src="js/csv.js"></script>
     <script src="js/dom.js"></script>
     <script src="js/collateral.js"></script>
@@ -482,12 +480,14 @@
     <script src="js/rates.js"></script>
     <script src="js/customers.js"></script>
     <script src="js/transactions.js"></script>
-    <script src="js/db.js"></script>
     <!-- Optional XLSX support for Excel imports -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="js/import_export.js"></script>
-    <script src="finance.js"></script>
+    <!-- Replace local JS finance with backend-driven finance proxy -->
+    <script src="js/api.js"></script>
+    <script src="js/api_adapter.js"></script>
+    <script src="js/finance_proxy.js"></script>
     <script src="js/filtering.js"></script>
-    <script src="script.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>

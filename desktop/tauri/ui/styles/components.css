@@ -127,3 +127,4 @@ form { padding: 16px; }
 .selected-loan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .selected-loan-grid .detail-item.full-width { grid-column: 1 / -1; }
 .transactions-summary-cards { margin-bottom: 16px; }
+

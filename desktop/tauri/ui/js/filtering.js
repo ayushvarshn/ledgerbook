@@ -4,7 +4,6 @@
 	}
 
 	function applyFilters(data, filterSpecs) {
-		// filterSpecs: [{ inputId, accessor(row) => string }]
 		const compiled = filterSpecs.map(spec => {
 			const el = document.getElementById(spec.inputId);
 			return { query: normalize(el ? el.value : ''), accessor: spec.accessor };
@@ -38,3 +37,5 @@
 
 	global.TableFiltering = { applyFilters, wireInputs, clearInputs };
 })(window);
+
+

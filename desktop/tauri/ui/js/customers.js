@@ -1,16 +1,7 @@
 (function (global) {
 	'use strict';
 
-	/**
-	 * Customers feature: render and actions
-	 * @namespace Customers
-	 */
 	const Customers = {
-		/**
-		 * Render the customers table.
-		 * @param {any} app - reference to main app (LendingLedger)
-		 * @param {Array<{id:number,name:string,fatherName:string,address:string}>} customers - list to render
-		 */
 		renderList(app, customers) {
 			const tbody = document.getElementById('customers-tbody');
 			if (!tbody) return;
@@ -44,3 +35,5 @@
 
 	global.Customers = Customers;
 })(window);
+
+

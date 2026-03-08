@@ -1,12 +1,7 @@
 (function (global) {
 	'use strict';
 
-	/**
-	 * Collateral items DOM management
-	 * @namespace Collateral
-	 */
 	const Collateral = {
-		/** Reset collateral items container to one empty item and wire events */
 		reset() {
 			const container = document.getElementById('collateral-items-container');
 			if (!container) return;
@@ -45,8 +40,6 @@
 			this.updateNumbers();
 			this.wireEvents();
 		},
-
-		/** Append a new collateral item row */
 		add() {
 			const container = document.getElementById('collateral-items-container');
 			if (!container) return;
@@ -88,8 +81,6 @@
 			this.updateNumbers();
 			this.wireEvents();
 		},
-
-		/** Remove an item element and renumber */
 		remove(itemElement) {
 			const container = document.getElementById('collateral-items-container');
 			if (!container || container.children.length <= 1) return;
@@ -97,8 +88,6 @@
 			this.updateNumbers();
 			this.wireEvents();
 		},
-
-		/** Update headers and button visibility */
 		updateNumbers() {
 			const container = document.getElementById('collateral-items-container');
 			if (!container) return;
@@ -111,8 +100,6 @@
 				removeBtn.style.display = items.length > 1 ? 'block' : 'none';
 			});
 		},
-
-		/** Wire remove buttons without duplicating handlers */
 		wireEvents() {
 			const buttons = document.querySelectorAll('.remove-collateral-item');
 			buttons.forEach(btn => {
@@ -124,8 +111,6 @@
 				});
 			});
 		},
-
-		/** Collect valid collateral items from DOM */
 		collect() {
 			const items = [];
 			const container = document.getElementById('collateral-items-container');
@@ -143,8 +128,6 @@
 			});
 			return items;
 		},
-
-		/** Populate DOM with provided collateral items */
 		populate(collateralItems) {
 			if (!collateralItems || collateralItems.length === 0) {
 				return this.reset();
@@ -194,3 +177,5 @@
 
 	global.Collateral = Collateral;
 })(window);
+
+

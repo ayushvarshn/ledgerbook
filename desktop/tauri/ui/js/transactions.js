@@ -1,19 +1,13 @@
 (function (global) {
 	'use strict';
 
-	/**
-	 * Transactions feature: render and actions
-	 * @namespace Transactions
-	 */
 	const Transactions = {
-		/** Render transactions table */
 		renderList(app, transactions, loans, customers) {
 			const tbody = document.getElementById('transactions-tbody');
 			if (!tbody) return;
 			tbody.innerHTML = '';
 			transactions.forEach(transaction => {
 				const loan = loans.find(l => l.id === transaction.loanId);
-				const customer = loan ? customers.find(c => c.id === loan.customerId) : null;
 				const row = document.createElement('tr');
 				row.innerHTML = `
 					<td>${transaction.id}</td>
@@ -33,3 +27,5 @@
 
 	global.Transactions = Transactions;
 })(window);
+
+
