@@ -1,0 +1,40 @@
+name: Release desktop installers
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and publish release assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop/tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Lending Ledger ${{ github.ref_name }}
+          releaseBody: |
+            Download the installer for your OS from the Assets section below.
+          releaseDraft: false
+          prerelease: false
+          args: --verbose
+
