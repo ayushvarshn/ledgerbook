@@ -410,29 +410,33 @@ class LendingLedger {
 		};
 		
 		if (loanId) loan.id = parseInt(loanId);
-		const savedLoan = await APIAdapter.upsertLoan(loan);
-		const idx = this.loans.findIndex(l => l.id === savedLoan.id);
-		if (idx >= 0) {
-			this.loans[idx] = savedLoan;
-			// sync/update collateral transaction on backend as standalone txn
-			const existingCollateralTx = this.transactions.find(t => t.loanId === savedLoan.id && (t.type || '').toLowerCase() === 'collateral');
-			const desc = this.formatCollateralItems(savedLoan);
-			if (existingCollateralTx) {
-				existingCollateralTx.description = desc;
-				existingCollateralTx.amount = 0;
-				existingCollateralTx.date = loanDate;
-				await APIAdapter.upsertTransaction({ ...existingCollateralTx, type: 'COLLATERAL' });
+		try {
+			const savedLoan = await APIAdapter.upsertLoan(loan);
+			const idx = this.loans.findIndex(l => l.id === savedLoan.id);
+			if (idx >= 0) {
+				this.loans[idx] = savedLoan;
+				// sync/update collateral transaction on backend as standalone txn
+				const existingCollateralTx = this.transactions.find(t => t.loanId === savedLoan.id && (t.type || '').toLowerCase() === 'collateral');
+				const desc = this.formatCollateralItems(savedLoan);
+				if (existingCollateralTx) {
+					existingCollateralTx.description = desc;
+					existingCollateralTx.amount = 0;
+					existingCollateralTx.date = loanDate;
+					await APIAdapter.upsertTransaction({ ...existingCollateralTx, type: 'COLLATERAL' });
+				} else {
+					const created = await APIAdapter.upsertTransaction({ loanId: savedLoan.id, type: 'COLLATERAL', amount: 0, description: desc, note: '', date: loanDate });
+					this.transactions.push(created);
+				}
 			} else {
-				const created = await APIAdapter.upsertTransaction({ loanId: savedLoan.id, type: 'COLLATERAL', amount: 0, description: desc, note: '', date: loanDate });
+				this.loans.push(savedLoan);
+				const created = await APIAdapter.upsertTransaction({ loanId: savedLoan.id, type: 'COLLATERAL', amount: 0, description: this.formatCollateralItems(savedLoan), note: '', date: loanDate });
 				this.transactions.push(created);
 			}
-		} else {
-			this.loans.push(savedLoan);
-			const created = await APIAdapter.upsertTransaction({ loanId: savedLoan.id, type: 'COLLATERAL', amount: 0, description: this.formatCollateralItems(savedLoan), note: '', date: loanDate });
-			this.transactions.push(created);
+			this.updateDashboard();
+			this.closeModal('loan-modal');
+		} catch (e) {
+			alert('Could not save loan. Please ensure the backend is running.\n\nDetails: ' + (e && e.message ? e.message : e));
 		}
-		this.updateDashboard();
-		this.closeModal('loan-modal');
 	}
 
 	async deleteLoan(loanId) {
@@ -548,12 +552,21 @@ class LendingLedger {
 		}
 
 		if (transactionId) transaction.id = parseInt(transactionId);
-		const saved = await APIAdapter.upsertTransaction(transaction);
-		const idx = this.transactions.findIndex(t => t.id === saved.id);
-		if (idx >= 0) this.transactions[idx] = saved; else this.transactions.push(saved);
-		this.renderTransactions();
-		this.updateDashboard();
-		this.closeModal('transaction-modal');
+		try {
+			const saved = await APIAdapter.upsertTransaction(transaction);
+			const idx = this.transactions.findIndex(t => Number(t.id) === Number(saved.id));
+			if (idx >= 0) this.transactions[idx] = saved; else this.transactions.push(saved);
+			this.renderTransactions();
+			this.updateDashboard();
+			// If customer loans modal is open and showing transactions for this loan, refresh that list
+			const customerLoansModal = document.getElementById('customer-loans-modal');
+			if (customerLoansModal && customerLoansModal.style.display === 'block') {
+				this.viewLoanTransactions(saved.loanId);
+			}
+			this.closeModal('transaction-modal');
+		} catch (e) {
+			alert('Could not save transaction. Please ensure the backend is running.\n\nDetails: ' + (e && e.message ? e.message : e));
+		}
 	}
 
 	updateReturnItemsVisibility() {
@@ -757,11 +770,10 @@ class LendingLedger {
 		const totalLoans = this.loans.length;
 		const totalTransactions = this.transactions.length;
 		
-		// Calculate total outstanding principal amount using stored netDue when present
+		// Total outstanding = sum of (debits - credits) per loan from current transactions
 		let totalOutstanding = 0;
 		this.loans.forEach(loan => {
-			const netDue = (typeof loan.netDue === 'number') ? loan.netDue : this.calculateNetDue(loan.id);
-			totalOutstanding += netDue;
+			totalOutstanding += this.calculateNetDue(loan.id);
 		});
 
 		document.getElementById('total-customers').textContent = totalCustomers;
@@ -933,28 +945,31 @@ class LendingLedger {
 	// one-time migration removed as per request
 
 	getLoanTransactions(loanId) {
-		return this.transactions.filter(t => t.loanId === loanId);
+		const lid = Number(loanId);
+		return this.transactions.filter(t => Number(t.loanId) === lid);
 	}
 
 	calculateNetDue(loanId) {
 		const loanTransactions = this.getLoanTransactions(loanId);
 		let netDue = 0;
 		loanTransactions.forEach(transaction => {
-			if (transaction.type === 'credit') {
-				netDue -= transaction.amount; // Payment reduces due amount
-			} else if (transaction.type === 'debit') {
-				netDue += transaction.amount; // Disbursement increases due amount
+			const type = (transaction.type || '').toLowerCase();
+			if (type === 'credit') {
+				netDue -= Number(transaction.amount) || 0; // Payment reduces due amount
+			} else if (type === 'debit') {
+				netDue += Number(transaction.amount) || 0; // Disbursement increases due amount
 			}
 		});
-		return netDue;
+		return Number(netDue.toFixed(2));
 	}
 
 	calculateTransactionTotals(transactions) {
 		let totalCredit = 0;
 		let totalDebit = 0;
 		transactions.forEach(t => {
-			if (t.type === 'credit') totalCredit += t.amount;
-			else if (t.type === 'debit') totalDebit += t.amount;
+			const type = (t.type || '').toLowerCase();
+			if (type === 'credit') totalCredit += Number(t.amount) || 0;
+			else if (type === 'debit') totalDebit += Number(t.amount) || 0;
 		});
 		return { totalCredit, totalDebit, netAmount: totalDebit - totalCredit };
 	}
@@ -1062,9 +1077,7 @@ class LendingLedger {
 		let totalCollateralValue = 0; // INR value based on weight * purity * metal rate
 		
 		customerLoans.forEach(loan => {
-			// Calculate net due for this loan (prefer stored principal)
-			const netDue = (typeof loan.netDue === 'number') ? loan.netDue : this.calculateNetDue(loan.id);
-			totalOutstanding += netDue;
+			totalOutstanding += this.calculateNetDue(loan.id);
 			
 			// Count collateral items and compute collateral value
 			if (loan.collateralItems && loan.collateralItems.length > 0) {
@@ -1136,10 +1149,7 @@ class LendingLedger {
 		tbody.innerHTML = '';
 
 		customerLoans.forEach(loan => {
-			// Net due principal: prefer stored interest-aware value
-			const netDue = (typeof loan.netPrincipal === 'number') ? loan.netPrincipal
-				: (typeof loan.netDue === 'number') ? loan.netDue
-				: this.calculateNetDue(loan.id);
+			const netDue = this.calculateNetDue(loan.id);
 
 			// Format collateral items display using helper function
 			const collateralDisplay = this.formatCollateralItems(loan);
@@ -1169,28 +1179,34 @@ class LendingLedger {
 		});
 	}
 
-	viewLoanTransactions(loanId) {
-		const loanTransactions = this.transactions.filter(t => t.loanId === loanId);
+	async viewLoanTransactions(loanId) {
+		const lid = Number(loanId);
 		const transactionsSection = document.getElementById('transactions-section');
 		const transactionsTbody = document.getElementById('customer-transactions-tbody');
-		
-		if (loanTransactions.length === 0) {
-			transactionsTbody.innerHTML = `
-				<tr>
-					<td colspan="4" class="text-center">No transactions found for this loan</td>
-				</tr>
-			`;
-		} else {
-			transactionsTbody.innerHTML = '';
-			// Compute schedule entries
-			let schedule = { entries: [], today: null };
-			if (window.Finance) {
-				const loan = this.loans.find(l => l.id === loanId);
-				schedule = window.Finance.calculateLoanSchedule(loan, loanTransactions);
-			}
-			const mapDateToDue = new Map(schedule.entries.map(e => [e.date, e]));
+		if (!transactionsSection || !transactionsTbody) return;
 
-			// Header may need dues columns
+		// Always fetch fresh transactions for this loan from the API so the list is up to date
+		let loanTransactions = [];
+		try {
+			const raw = await API.listTransactions(lid);
+			loanTransactions = (raw || []).map(t => ({
+				id: t.id,
+				loanId: t.loan_id != null ? t.loan_id : lid,
+				type: (t.type || '').toUpperCase(),
+				amount: t.amount || 0,
+				description: t.description || '',
+				note: t.note || '',
+				date: t.date
+			}));
+			// Keep in-memory cache in sync: remove old tx for this loan, add fresh ones
+			this.transactions = this.transactions.filter(t => Number(t.loanId) !== lid);
+			loanTransactions.forEach(t => this.transactions.push(t));
+		} catch (e) {
+			// Fallback to in-memory if API fails
+			loanTransactions = this.transactions.filter(t => Number(t.loanId) === lid);
+		}
+
+		// Update header to 8 columns if still at default 4
 		const thead = document.querySelector('#customer-transactions-table thead tr');
 		if (thead && thead.children.length === 4) {
 			thead.innerHTML = `
@@ -1203,19 +1219,35 @@ class LendingLedger {
 				<th>Interest Due</th>
 			`;
 		}
+		const colCount = thead ? thead.children.length : 4;
 
-			// Sort by date ascending, then by ID to break ties
+		if (loanTransactions.length === 0) {
+			transactionsTbody.innerHTML = `
+				<tr>
+					<td colspan="${colCount}" class="text-center">No transactions found for this loan</td>
+				</tr>
+			`;
+		} else {
+			transactionsTbody.innerHTML = '';
+			let schedule = { entries: [], today: null };
+			const loan = this.loans.find(l => Number(l.id) === lid);
+			if (window.Finance && loan) {
+				schedule = window.Finance.calculateLoanSchedule(loan, loanTransactions);
+			}
+			const mapDateToDue = new Map((schedule.entries || []).map(e => [e.date, e]));
+
 			const sortedByDate = [...loanTransactions].sort((a, b) => {
 				const da = new Date(a.date), db = new Date(b.date);
 				if (da - db !== 0) return da - db;
 				return (Number(a.id) || 0) - (Number(b.id) || 0);
 			});
+			const typeLower = (t) => (t.type || '').toLowerCase();
 			sortedByDate.forEach(transaction => {
 				const row = document.createElement('tr');
 				const due = mapDateToDue.get(transaction.date);
 				row.innerHTML = `
 					<td>${transaction.id}</td>
-					<td><span class="badge ${transaction.type === 'credit' ? 'badge-success' : 'badge-danger'}">${transaction.type.toUpperCase()}</span></td>
+					<td><span class="badge ${typeLower(transaction) === 'credit' ? 'badge-success' : 'badge-danger'}">${(transaction.type || '').toUpperCase()}</span></td>
 					<td>${this.formatCurrency(transaction.amount)}</td>
 					<td>${this.formatDate(transaction.date)}</td>
 					<td>${transaction.description ? this.escapeHTML(transaction.description) : '-'}</td>
@@ -1225,11 +1257,10 @@ class LendingLedger {
 				transactionsTbody.appendChild(row);
 			});
 
-			// Append Today row with highlight and items based on transactions (remaining collateral)
 			if (schedule.today) {
 				const row = document.createElement('tr');
 				row.className = 'today-row';
-				const remainingLabels = this.getRemainingCollateralLabels(loanId);
+				const remainingLabels = this.getRemainingCollateralLabels(lid);
 				const itemsText = remainingLabels.length ? remainingLabels.join(', ') : '—';
 				row.innerHTML = `
 					<td>—</td>
@@ -1243,17 +1274,18 @@ class LendingLedger {
 				transactionsTbody.appendChild(row);
 			}
 		}
-		
+
 		transactionsSection.style.display = 'block';
 		transactionsSection.scrollIntoView({ behavior: 'smooth' });
 	}
 
 	getRemainingCollateralLabels(loanId) {
-		const loan = this.loans.find(l => l.id === loanId);
+		const lid = Number(loanId);
+		const loan = this.loans.find(l => Number(l.id) === lid);
 		if (!loan) return [];
 		const baseLabels = (loan.collateralItems || []).map(item => this.buildCollateralItemLabel(item));
 		const returned = new Set();
-		const txs = this.transactions.filter(t => t.loanId === loanId && (t.type || '').toLowerCase() === 'return_items');
+		const txs = this.transactions.filter(t => Number(t.loanId) === lid && (t.type || '').toLowerCase() === 'return_items');
 		txs.forEach(t => {
 			const desc = t.description || '';
 			const parts = desc.split(':');
@@ -1351,9 +1383,7 @@ class LendingLedger {
 	populateSelectedLoanInfo(loan, customerName) {
 		const loanInfo = document.getElementById('selected-loan-info');
 		const collateralDisplay = this.formatCollateralItems(loan);
-		
-		// Calculate net due
-		const netDue = (typeof loan.netDue === 'number') ? loan.netDue : this.calculateNetDue(loan.id);
+		const netDue = this.calculateNetDue(loan.id);
 		
 		loanInfo.innerHTML = `
 			<div class="selected-loan-details">

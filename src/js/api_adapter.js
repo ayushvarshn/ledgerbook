@@ -9,7 +9,7 @@
         id: l.id,
         customerId: l.customer_id,
         interestRate: l.interest_rate,
-        collateralItems: (l.collateral_items || []).map(i => ({ name: i.name || '', weight: i.weight || 0, purity: i.purity || 0 })),
+        collateralItems: (l.collateral_items || []).map(i => ({ name: i.name || '', metalType: i.metalType || 'gold', weight: i.weight || 0, purity: i.purity || 0 })),
         netPrincipal: l.net_principal || 0,
         asOfDate: l.as_of_date || null
       };
@@ -18,9 +18,9 @@
       return {
         customer_id: l.customerId,
         interest_rate: l.interestRate,
-        collateral_items: (l.collateralItems || []).map(i => ({ name: i.name || '', weight: i.weight || 0, purity: i.purity || 0 })),
-        net_principal: l.netPrincipal || 0,
-        as_of_date: l.asOfDate || null
+        collateral_items: (l.collateralItems || []).map(i => ({ name: i.name || '', metalType: i.metalType || 'gold', weight: i.weight || 0, purity: i.purity || 0 })),
+        net_principal: l.netPrincipal ?? 0,
+        as_of_date: l.asOfDate ?? null
       };
     },
 

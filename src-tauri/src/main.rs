@@ -22,7 +22,14 @@ fn find_repo_root() -> Option<PathBuf> {
 
 fn spawn_backend_dev() -> Option<Child> {
     let repo_root = find_repo_root()?;
-    let mut cmd = Command::new(if cfg!(target_os = "windows") { "python" } else { "python3" });
+    // Prefer venv Python so uvicorn is available without activating the venv in the shell
+    let python = if cfg!(target_os = "windows") {
+        repo_root.join(".venv").join("Scripts").join("python.exe")
+    } else {
+        repo_root.join(".venv").join("bin").join("python3")
+    };
+    let python_cmd = if python.exists() { python.as_os_str() } else { std::ffi::OsStr::new(if cfg!(target_os = "windows") { "python" } else { "python3" }) };
+    let mut cmd = Command::new(python_cmd);
     cmd.args([
         "-m",
         "uvicorn",
