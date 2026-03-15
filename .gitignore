@@ -29,7 +29,7 @@ Cargo.lock
 .DS_Store
 
 # Tauri
-desktop/tauri/src-tauri/target/
+src-tauri/target/
 
 # Logs
 *.log
