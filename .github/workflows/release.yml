@@ -41,6 +41,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Skip AppleScript-based DMG styling in CI to avoid "AppleEvent timed out (-1712)" on macOS
+          TAURI_BUNDLER_DMG_IGNORE_CI: false
         with:
           projectPath: .
           tagName: ${{ github.ref_name }}
