@@ -1,3 +1,6 @@
+# Dependencies
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -17,7 +20,6 @@ build/
 
 # Rust
 target/
-Cargo.lock
 **/*.rs.bk
 
 # IDE
@@ -26,7 +28,6 @@ Cargo.lock
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Tauri
 src-tauri/target/
