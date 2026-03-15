@@ -10,7 +10,7 @@ You can install **Lending Ledger** like a normal desktop app using the links bel
 
 1. Open your web browser (Chrome, Safari, Edge, etc.).
 2. Go to the project’s GitHub page (the link from your team or developer).  
-   - To go straight to installers, add `/releases` to the end of that link (e.g. `https://github.com/username/ledgerbook_tauri/releases`).
+   - To go straight to installers, add `/releases` to the end of that link (e.g. `https://github.com/username/ledgerbook/releases`).
 
 ### Step 2: Open Releases
 
